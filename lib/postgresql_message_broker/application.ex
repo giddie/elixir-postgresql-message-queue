@@ -8,8 +8,11 @@ defmodule PostgresqlMessageBroker.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: PostgresqlMessageBroker.Worker.start_link(arg)
-      # {PostgresqlMessageBroker.Worker, arg}
+      PostgresqlMessageBroker.Persistence.Repo,
+      {PostgresqlMessageBroker.Persistence.NotificationListener,
+        name: PostgresqlMessageBroker.Persistence.Repo.NotificationListener,
+        repo: PostgresqlMessageBroker.Persistence.Repo},
+      PostgresqlMessageBroker.Messaging.OutboxWatcher
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
