@@ -24,7 +24,8 @@ defmodule PostgresqlMessageBroker.Messaging do
 
     @impl Exception
     def message(%__MODULE__{} = struct) do
-      "Failed to serialize message: #{inspect(struct.message_struct)}. " <> inspect(struct.message)
+      "Failed to serialize message: #{inspect(struct.message_struct)}. " <>
+        inspect(struct.message)
     end
   end
 
@@ -95,7 +96,8 @@ defmodule PostgresqlMessageBroker.Messaging do
   `#{MessageHandler}` behaviour. The messages are handled synchronously, wrapped in a single
   database transaction. This is particularly useful for tests.
   """
-  @spec unicast_messages_sync([Message.t()], atom(), opts) :: :ok | {:error, SerializationError.t()}
+  @spec unicast_messages_sync([Message.t()], atom(), opts) ::
+          :ok | {:error, SerializationError.t()}
         when opts: [filters: [String.t()]]
   def unicast_messages_sync(messages, message_handler_module, opts \\ [])
       when is_list(messages) and
@@ -105,7 +107,8 @@ defmodule PostgresqlMessageBroker.Messaging do
         type_path = String.split(message.type, ".")
         type_filters = Keyword.get(opts, :filters, [])
 
-        if type_filters == [] || Enum.any?(type_filters, &type_filter_matches_path?(&1, type_path)) do
+        if type_filters == [] ||
+             Enum.any?(type_filters, &type_filter_matches_path?(&1, type_path)) do
           case normalize_message_payload(message) do
             {:ok, message} -> deliver_message_to_handler!(message, message_handler_module)
             {:error, reason} -> Repo.rollback(reason)
@@ -119,7 +122,8 @@ defmodule PostgresqlMessageBroker.Messaging do
     end
   end
 
-  @spec normalize_message_payload(Message.t()) :: {:ok, Message.t()} | {:error, SerializationError.t()}
+  @spec normalize_message_payload(Message.t()) ::
+          {:ok, Message.t()} | {:error, SerializationError.t()}
   defp normalize_message_payload(%Message{} = message) do
     with {:ok, payload_json} <- Jason.encode(message.payload),
          {:ok, payload_normalized} <- Jason.decode(payload_json) do
@@ -157,7 +161,8 @@ defmodule PostgresqlMessageBroker.Messaging do
   ## Asynchronously
   * `#{OutboxProcessor}` calls `process_outbox_batch/1` automatically when messages are stored in the outbox.
   """
-  @spec broadcast_messages([Message.t()], broadcast_opts()) :: :ok | {:error, SerializationError.t()}
+  @spec broadcast_messages([Message.t()], broadcast_opts()) ::
+          :ok | {:error, SerializationError.t()}
   def broadcast_messages(messages, opts \\ []) when is_list(messages) do
     queue = Keyword.fetch!(opts, :to_queue)
 
@@ -191,7 +196,8 @@ defmodule PostgresqlMessageBroker.Messaging do
   """
   @spec store_message_in_outbox(Message.t(), String.t(), :now | {:after, DateTime.t()}) ::
           :ok | {:error, SerializationError.t()}
-  def store_message_in_outbox(%Message{} = message, queue, process_after \\ :now) when is_binary(queue) do
+  def store_message_in_outbox(%Message{} = message, queue, process_after \\ :now)
+      when is_binary(queue) do
     if not Repo.in_transaction?() do
       raise "Messages stored in the outbox must be sent within a transaction."
     end
@@ -231,7 +237,9 @@ defmodule PostgresqlMessageBroker.Messaging do
   tests, when the `#{OutboxProcessor}` is not running. You can use this function to check that the
   code under test has dispatched the expected messages.
   """
-  @spec peek_at_outbox_messages(skip_locked: boolean(), limit: pos_integer()) :: %{queue => [Message.t()]}
+  @spec peek_at_outbox_messages(skip_locked: boolean(), limit: pos_integer()) :: %{
+          queue => [Message.t()]
+        }
         when queue: String.t()
   def peek_at_outbox_messages(opts \\ []) do
     skip_locked = Keyword.get(opts, :skip_locked, false)
@@ -361,7 +369,8 @@ defmodule PostgresqlMessageBroker.Messaging do
   end
 
   @spec deliver_message_to_handlers!(Message.t(), [{module(), [String.t()]}]) :: :ok
-  defp deliver_message_to_handlers!(%Message{} = message, handler_configs) when is_list(handler_configs) do
+  defp deliver_message_to_handlers!(%Message{} = message, handler_configs)
+       when is_list(handler_configs) do
     type_path = String.split(message.type, ".")
 
     Logger.info("Messaging: #{inspect(message)}")
@@ -376,7 +385,8 @@ defmodule PostgresqlMessageBroker.Messaging do
   end
 
   @spec deliver_message_to_handler!(Message.t(), module) :: :ok
-  defp deliver_message_to_handler!(%Message{} = message, message_handler_module) when is_atom(message_handler_module) do
+  defp deliver_message_to_handler!(%Message{} = message, message_handler_module)
+       when is_atom(message_handler_module) do
     message_handler_module.handle_message(message)
     |> case do
       :ok ->

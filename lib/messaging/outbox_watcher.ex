@@ -64,7 +64,10 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxWatcher do
 
   @impl GenServer
   def handle_info(
-        %NotificationListener.Notification{channel: "outbox_messages_inserted", payload: queue_name},
+        %NotificationListener.Notification{
+          channel: "outbox_messages_inserted",
+          payload: queue_name
+        },
         %State{} = state
       ) do
     state =
@@ -88,7 +91,10 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxWatcher do
         Enum.join(state.notify_queues, ", ")
       end
 
-    Logger.info(log_prefix() <> "Subscribing queue: #{queue}. Already subscribed: #{already_subscribed_info}.")
+    Logger.info(
+      log_prefix() <>
+        "Subscribing queue: #{queue}. Already subscribed: #{already_subscribed_info}."
+    )
 
     notify_queues = MapSet.put(state.notify_queues, queue)
     %{state | notify_queues: notify_queues}

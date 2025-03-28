@@ -35,7 +35,8 @@ defmodule PostgresqlMessageBroker.Persistence.NotificationListener do
     end
 
     @spec subscribe_pid_to_channel(Self.t(), pid(), String.t()) :: Self.t()
-    def subscribe_pid_to_channel(%Self{} = self, pid, channel) when is_pid(pid) and is_binary(channel) do
+    def subscribe_pid_to_channel(%Self{} = self, pid, channel)
+        when is_pid(pid) and is_binary(channel) do
       self.channel_subscriptions
       |> Map.update(channel, [pid], fn pid_list ->
         [pid | pid_list]
@@ -111,7 +112,10 @@ defmodule PostgresqlMessageBroker.Persistence.NotificationListener do
   end
 
   @impl GenServer
-  def handle_info({:notification, notification_pid, listen_ref, channel, payload}, %State{} = state)
+  def handle_info(
+        {:notification, notification_pid, listen_ref, channel, payload},
+        %State{} = state
+      )
       when is_binary(channel) and is_binary(payload) do
     case Map.fetch(state.channel_subscriptions, channel) do
       :error ->

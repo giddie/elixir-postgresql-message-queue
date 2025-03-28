@@ -10,8 +10,8 @@ defmodule PostgresqlMessageBroker.Application do
     children = [
       PostgresqlMessageBroker.Persistence.Repo,
       {PostgresqlMessageBroker.Persistence.NotificationListener,
-        name: PostgresqlMessageBroker.Persistence.Repo.NotificationListener,
-        repo: PostgresqlMessageBroker.Persistence.Repo},
+       name: PostgresqlMessageBroker.Persistence.Repo.NotificationListener,
+       repo: PostgresqlMessageBroker.Persistence.Repo},
       PostgresqlMessageBroker.Messaging.OutboxWatcher
     ]
 

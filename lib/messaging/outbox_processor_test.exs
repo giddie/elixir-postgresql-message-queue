@@ -40,7 +40,9 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
       |> :erlang.term_to_binary()
       |> Base.encode64()
 
-    handler = &Messaging.deliver_messages_to_handlers!([&1], [{TestMessageHandler, ["Test.Command.*"]}])
+    handler =
+      &Messaging.deliver_messages_to_handlers!([&1], [{TestMessageHandler, ["Test.Command.*"]}])
+
     start_link_supervised!({OutboxProcessor, queue: queue, handler: handler})
 
     Repo.transaction(fn ->
@@ -329,12 +331,20 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
 
     # This time we're checking that exceptions in inner db transactions shouldn't cause any issues to the backoff
     # mechanism.
-    send(handler_pid, {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end})
+    send(
+      handler_pid,
+      {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end}
+    )
+
     refute_receive _, 900
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
 
     # This time we're checking that inner db transaction rollbacks shouldn't cause any issues to the backoff mechanism.
-    send(handler_pid, {:run, fn -> Repo.transaction(fn -> Repo.rollback("test rollback") end) end})
+    send(
+      handler_pid,
+      {:run, fn -> Repo.transaction(fn -> Repo.rollback("test rollback") end) end}
+    )
+
     refute_receive _, 900
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
 
@@ -369,7 +379,9 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
       _ -> 2_000
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, backoff_ms: backoff_ms_func})
+    start_link_supervised!(
+      {OutboxProcessor, queue: queue, handler: handler, backoff_ms: backoff_ms_func}
+    )
 
     Repo.transaction(fn ->
       [
@@ -400,7 +412,11 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
 
     # The third time, it should re-use the final backoff interval.
-    send(handler_pid, {:run, fn -> Repo.transaction(fn -> Repo.rollback("test rollback") end) end})
+    send(
+      handler_pid,
+      {:run, fn -> Repo.transaction(fn -> Repo.rollback("test rollback") end) end}
+    )
+
     refute_receive _, 1_900
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
 
@@ -451,7 +467,9 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
       1 -> raise "Test backoff_ms_func exception!"
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, backoff_ms: backoff_ms_func})
+    start_link_supervised!(
+      {OutboxProcessor, queue: queue, handler: handler, backoff_ms: backoff_ms_func}
+    )
 
     Repo.transaction(fn ->
       [
@@ -760,7 +778,9 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, batch_size: 5, concurrency: 5})
+    start_link_supervised!(
+      {OutboxProcessor, queue: queue, handler: handler, batch_size: 5, concurrency: 5}
+    )
 
     Repo.transaction(fn ->
       for batch_start <- 1..100//20 do
@@ -810,7 +830,9 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
 
     # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
     # which case the message will be processed immediately after any other messages that are already in the queue.
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000})
+    start_link_supervised!(
+      {OutboxProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000}
+    )
 
     Repo.transaction(fn ->
       [
@@ -842,12 +864,20 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 400)
 
     # This time we're checking that exceptions in inner db transactions shouldn't cause any issues to the backoff mechanism.
-    send(first_handler_pid, {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end})
+    send(
+      first_handler_pid,
+      {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end}
+    )
+
     refute_receive _, 900
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
 
     # This time we're checking that inner db transaction rollbacks shouldn't cause any issues to the backoff mechanism.
-    send(first_handler_pid, {:run, fn -> Repo.transaction(fn -> Repo.rollback("test rollback") end) end})
+    send(
+      first_handler_pid,
+      {:run, fn -> Repo.transaction(fn -> Repo.rollback("test rollback") end) end}
+    )
+
     refute_receive _, 900
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
 
@@ -892,7 +922,8 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
     end
 
     start_link_supervised!(
-      {OutboxProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: backoff_ms_func}
+      {OutboxProcessor,
+       queue: queue, handler: handler, concurrency: 2, backoff_ms: backoff_ms_func}
     )
 
     Repo.transaction(fn ->
@@ -926,7 +957,11 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
 
     # The third time, it should re-use the final backoff interval.
-    send(first_handler_pid, {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end})
+    send(
+      first_handler_pid,
+      {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end}
+    )
+
     refute_receive _, 1_900
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
 
@@ -970,7 +1005,8 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
     end
 
     start_link_supervised!(
-      {OutboxProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: backoff_ms_func}
+      {OutboxProcessor,
+       queue: queue, handler: handler, concurrency: 2, backoff_ms: backoff_ms_func}
     )
 
     Repo.transaction(fn ->
@@ -1001,7 +1037,11 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
 
     # The third time, it should still use the default 1_000.
-    send(first_handler_pid, {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end})
+    send(
+      first_handler_pid,
+      {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end}
+    )
+
     refute_receive _, 900
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
 
@@ -1036,7 +1076,9 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
 
     # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
     # which case the message will be processed immediately after any other messages that are already in the queue.
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000})
+    start_link_supervised!(
+      {OutboxProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000}
+    )
 
     Repo.transaction(fn ->
       [%Message{type: "Test.Event.FirstEvent", schema_version: 1, payload: %{}}]

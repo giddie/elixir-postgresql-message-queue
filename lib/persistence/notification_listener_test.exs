@@ -63,9 +63,14 @@ defmodule PostgresqlMessageBroker.Persistence.NotificationListenerTest do
       assert Enum.empty?(state.channel_subscriptions)
     end
 
-    test "killing the db connection process should bring down the server", %{listener_pid: listener_pid} do
+    test "killing the db connection process should bring down the server", %{
+      listener_pid: listener_pid
+    } do
       Process.flag(:trap_exit, true)
-      %NotificationListener.State{notifications_pid: notifications_pid} = :sys.get_state(listener_pid)
+
+      %NotificationListener.State{notifications_pid: notifications_pid} =
+        :sys.get_state(listener_pid)
+
       Process.exit(notifications_pid, :kill)
       assert_receive {:EXIT, ^listener_pid, _reason}
     end

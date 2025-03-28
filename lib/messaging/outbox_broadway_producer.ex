@@ -283,7 +283,8 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxBroadwayProducer do
   end
 
   @impl Broadway.Acknowledger
-  def ack(batch_ack_pid = _ack_ref, successful, failed) when is_list(successful) and is_list(failed) do
+  def ack(batch_ack_pid = _ack_ref, successful, failed)
+      when is_list(successful) and is_list(failed) do
     if failed == [] do
       # The recipient is just counting messages to ack the whole batch, so we don't care about specific message details.
       Enum.each(successful, fn %Broadway.Message{} -> send(batch_ack_pid, :successful) end)
@@ -328,7 +329,8 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxBroadwayProducer do
       rescue
         e ->
           Logger.warning(
-            log_prefix(state) <> Exception.message(e) <> "\n" <> Exception.format_stacktrace(__STACKTRACE__)
+            log_prefix(state) <>
+              Exception.message(e) <> "\n" <> Exception.format_stacktrace(__STACKTRACE__)
           )
 
           send(server_pid, {:finished_processing_batch, :failed})
@@ -382,7 +384,8 @@ defmodule PostgresqlMessageBroker.Messaging.OutboxBroadwayProducer do
     # we can strip it out here to keep messages clear.
     # https://hexdocs.pm/broadway/Broadway.Message.html#t:t/0
     message_error =
-      with {cause, reason, stacktrace} when cause in [:throw, :error, :exit] and is_list(stacktrace) <- message_error do
+      with {cause, reason, stacktrace}
+           when cause in [:throw, :error, :exit] and is_list(stacktrace) <- message_error do
         {cause, reason}
       end
 
