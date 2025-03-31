@@ -1,10 +1,10 @@
-defmodule PostgresqlMessageBroker.ExampleUsage do
+defmodule PostgresqlMessageQueue.ExampleUsage do
   @moduledoc """
-  This module demonstrates durable asynchronous job processing using the internal message broker.
+  This module demonstrates durable asynchronous job processing using the internal message queue.
   """
 
-  alias PostgresqlMessageBroker.Messaging
-  alias PostgresqlMessageBroker.Persistence.Repo
+  alias PostgresqlMessageQueue.Messaging
+  alias PostgresqlMessageQueue.Persistence.Repo
 
   require Logger
 

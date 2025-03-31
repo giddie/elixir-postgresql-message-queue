@@ -1,11 +1,11 @@
-defmodule PostgresqlMessageBroker.Persistence.NotificationListenerTest do
+defmodule PostgresqlMessageQueue.Persistence.NotificationListenerTest do
   @moduledoc false
 
-  alias PostgresqlMessageBroker.Persistence.NotificationListener
-  alias PostgresqlMessageBroker.Persistence.NotificationListener.Notification
-  alias PostgresqlMessageBroker.Persistence.Repo
+  alias PostgresqlMessageQueue.Persistence.NotificationListener
+  alias PostgresqlMessageQueue.Persistence.NotificationListener.Notification
+  alias PostgresqlMessageQueue.Persistence.Repo
 
-  use PostgresqlMessageBroker.Tests.DataCase, async: false
+  use PostgresqlMessageQueue.Tests.DataCase, async: false
   @moduletag use_ecto_sandbox: false
 
   describe "with NotificationListener" do

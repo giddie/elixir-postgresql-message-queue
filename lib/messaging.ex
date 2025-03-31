@@ -1,17 +1,17 @@
-defmodule PostgresqlMessageBroker.Messaging do
+defmodule PostgresqlMessageQueue.Messaging do
   @moduledoc """
   Handles everything to do with internal message storage and delivery.
   """
 
   alias __MODULE__, as: Self
-  alias PostgresqlMessageBroker.Messaging.OutboxProcessor
-  alias PostgresqlMessageBroker.Persistence.Repo
+  alias PostgresqlMessageQueue.Messaging.OutboxProcessor
+  alias PostgresqlMessageQueue.Persistence.Repo
 
   require AyeSQL
   require Ecto.Query
   require Logger
 
-  @broadcast_listeners Application.compile_env(:postgresql_message_broker, Self, [])
+  @broadcast_listeners Application.compile_env(:postgresql_message_queue, Self, [])
                        |> Keyword.get(:broadcast_listeners, [])
 
   def global_queue(), do: "global"
@@ -191,7 +191,7 @@ defmodule PostgresqlMessageBroker.Messaging do
 
   @doc """
   Stores the given messages in the outbox, which is a database table that acts as a transactional
-  staging area for messages awaiting dispatch to the message broker. The `#{OutboxProcessor}` is
+  staging area for messages awaiting dispatch to the message queue. The `#{OutboxProcessor}` is
   responsible for picking up the messages and delivering them using `process_outbox_batch/1`.
   """
   @spec store_message_in_outbox(Message.t(), String.t(), :now | {:after, DateTime.t()}) ::
@@ -233,7 +233,7 @@ defmodule PostgresqlMessageBroker.Messaging do
   end
 
   @doc """
-  List messages in the outbox awaiting delivery to the message broker. This is useful mainly for
+  List messages in the outbox awaiting delivery to the message queue. This is useful mainly for
   tests, when the `#{OutboxProcessor}` is not running. You can use this function to check that the
   code under test has dispatched the expected messages.
   """
@@ -268,7 +268,7 @@ defmodule PostgresqlMessageBroker.Messaging do
 
   @doc """
   Pulls a batch of messages from the outbox (see `store_message_in_outbox/1`), and publishes them using the message
-  broker. If no errors occurred, the messages are then removed from the outbox. The batch_size determines how many
+  queue. If no errors occurred, the messages are then removed from the outbox. The batch_size determines how many
   messages are retrieved.
 
   ### Parallel Consumers

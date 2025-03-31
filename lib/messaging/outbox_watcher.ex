@@ -1,13 +1,13 @@
-defmodule PostgresqlMessageBroker.Messaging.OutboxWatcher do
+defmodule PostgresqlMessageQueue.Messaging.OutboxWatcher do
   @moduledoc """
-  Watches the message outbox for new messages (see `PostgresqlMessageBroker.Messaging.store_message_in_outbox/1`). When new messages
+  Watches the message outbox for new messages (see `PostgresqlMessageQueue.Messaging.store_message_in_outbox/1`). When new messages
   arrive, notifies the OutboxProcessor process for the relevant queues.
   """
 
   alias __MODULE__, as: Self
-  alias PostgresqlMessageBroker.Messaging.OutboxProcessor
-  alias PostgresqlMessageBroker.Persistence.Repo
-  alias PostgresqlMessageBroker.Persistence.NotificationListener
+  alias PostgresqlMessageQueue.Messaging.OutboxProcessor
+  alias PostgresqlMessageQueue.Persistence.Repo
+  alias PostgresqlMessageQueue.Persistence.NotificationListener
 
   use GenServer
 

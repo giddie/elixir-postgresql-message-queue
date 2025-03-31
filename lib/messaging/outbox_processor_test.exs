@@ -1,14 +1,14 @@
-defmodule PostgresqlMessageBroker.Messaging.OutboxProcessorTest do
+defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
   @moduledoc false
 
-  alias PostgresqlMessageBroker.Messaging
-  alias PostgresqlMessageBroker.Messaging.Message
-  alias PostgresqlMessageBroker.Messaging.MessageHandler
-  alias PostgresqlMessageBroker.Messaging.OutboxProcessor
-  alias PostgresqlMessageBroker.Persistence.Repo
+  alias PostgresqlMessageQueue.Messaging
+  alias PostgresqlMessageQueue.Messaging.Message
+  alias PostgresqlMessageQueue.Messaging.MessageHandler
+  alias PostgresqlMessageQueue.Messaging.OutboxProcessor
+  alias PostgresqlMessageQueue.Persistence.Repo
 
   # We do some global operations in the database to test what is visible in different transactions
-  use PostgresqlMessageBroker.Tests.DataCase, async: false
+  use PostgresqlMessageQueue.Tests.DataCase, async: false
   @moduletag use_ecto_sandbox: false
 
   defmodule TestMessageHandler do

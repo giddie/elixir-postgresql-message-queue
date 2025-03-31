@@ -1,4 +1,4 @@
-defmodule PostgresqlMessageBroker.Tests.DataCase do
+defmodule PostgresqlMessageQueue.Tests.DataCase do
   @moduledoc """
   This module defines the setup for tests requiring
   access to the application's data layer.
@@ -10,27 +10,27 @@ defmodule PostgresqlMessageBroker.Tests.DataCase do
   we enable the SQL sandbox, so changes done to the database
   are reverted at the end of every test. If you are using
   PostgreSQL, you can even run database tests asynchronously
-  by setting `use PostgresqlMessageBroker.DataCase, async: true`, although
+  by setting `use PostgresqlMessageQueue.DataCase, async: true`, although
   this option is not recommended for other databases.
   """
 
-  alias PostgresqlMessageBroker.Tests.DatabaseHelpers
+  alias PostgresqlMessageQueue.Tests.DatabaseHelpers
 
   use ExUnit.CaseTemplate
 
   using do
     quote do
-      alias PostgresqlMessageBroker.Persistence.Repo
+      alias PostgresqlMessageQueue.Persistence.Repo
 
       import Ecto
       import Ecto.Changeset
       import Ecto.Query
-      import PostgresqlMessageBroker.Tests.DataCase
+      import PostgresqlMessageQueue.Tests.DataCase
     end
   end
 
   setup tags do
-    PostgresqlMessageBroker.Tests.DataCase.setup_sandbox(tags)
+    PostgresqlMessageQueue.Tests.DataCase.setup_sandbox(tags)
     :ok
   end
 
@@ -38,7 +38,7 @@ defmodule PostgresqlMessageBroker.Tests.DataCase do
   Sets up the sandbox based on the test tags.
   """
   def setup_sandbox(tags) do
-    repo = PostgresqlMessageBroker.Persistence.Repo
+    repo = PostgresqlMessageQueue.Persistence.Repo
 
     if Map.get(tags, :use_ecto_sandbox, true) do
       pid = Ecto.Adapters.SQL.Sandbox.start_owner!(repo, shared: not tags[:async])

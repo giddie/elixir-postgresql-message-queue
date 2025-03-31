@@ -1,4 +1,4 @@
-defmodule PostgresqlMessageBroker.Persistence.NotificationListener do
+defmodule PostgresqlMessageQueue.Persistence.NotificationListener do
   @moduledoc """
   GenServer proxy for PostgreSQL's notify/listen. This server can be used to subscribe to any channel, and messages
   delivered to that channel will be sent to your process's message box. Uses a single db connection.

@@ -1,4 +1,4 @@
-defmodule PostgresqlMessageBroker.Persistence.Repo.Migrations.CreateOutboxMessages do
+defmodule PostgresqlMessageQueue.Persistence.Repo.Migrations.CreateOutboxMessages do
   use Ecto.Migration
 
   def change do

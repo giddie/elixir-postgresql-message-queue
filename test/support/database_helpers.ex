@@ -1,7 +1,7 @@
-defmodule PostgresqlMessageBroker.Tests.DatabaseHelpers do
+defmodule PostgresqlMessageQueue.Tests.DatabaseHelpers do
   @moduledoc false
 
-  alias PostgresqlMessageBroker.Persistence.Repo
+  alias PostgresqlMessageQueue.Persistence.Repo
 
   require AyeSQL
 

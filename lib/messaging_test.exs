@@ -1,11 +1,11 @@
-defmodule PostgresqlMessageBroker.MessagingTest do
+defmodule PostgresqlMessageQueue.MessagingTest do
   @moduledoc false
 
-  use PostgresqlMessageBroker.Tests.DataCase, async: true
+  use PostgresqlMessageQueue.Tests.DataCase, async: true
 
-  alias PostgresqlMessageBroker.Messaging
-  alias PostgresqlMessageBroker.Messaging.Message
-  alias PostgresqlMessageBroker.Persistence.Repo
+  alias PostgresqlMessageQueue.Messaging
+  alias PostgresqlMessageQueue.Messaging.Message
+  alias PostgresqlMessageQueue.Persistence.Repo
 
   test "type_filter_matches_path?" do
     type_path = ["One", "Two", "Three"]
@@ -27,7 +27,7 @@ defmodule PostgresqlMessageBroker.MessagingTest do
     queue = UUID.uuid4()
 
     Repo.transaction(fn ->
-      assert {:error, %PostgresqlMessageBroker.Messaging.SerializationError{}} =
+      assert {:error, %PostgresqlMessageQueue.Messaging.SerializationError{}} =
                Messaging.store_message_in_outbox(
                  %Message{
                    type: "Messaging.Event.Example",

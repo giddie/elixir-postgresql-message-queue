@@ -1,4 +1,4 @@
-defmodule PostgresqlMessageBroker.Application do
+defmodule PostgresqlMessageQueue.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
@@ -8,17 +8,17 @@ defmodule PostgresqlMessageBroker.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      PostgresqlMessageBroker.Persistence.Repo,
-      {PostgresqlMessageBroker.Persistence.NotificationListener,
-       name: PostgresqlMessageBroker.Persistence.Repo.NotificationListener,
-       repo: PostgresqlMessageBroker.Persistence.Repo},
-      PostgresqlMessageBroker.Messaging.OutboxWatcher,
+      PostgresqlMessageQueue.Persistence.Repo,
+      {PostgresqlMessageQueue.Persistence.NotificationListener,
+       name: PostgresqlMessageQueue.Persistence.Repo.NotificationListener,
+       repo: PostgresqlMessageQueue.Persistence.Repo},
+      PostgresqlMessageQueue.Messaging.OutboxWatcher,
       outbox_processor_spec()
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: PostgresqlMessageBroker.Supervisor]
+    opts = [strategy: :one_for_one, name: PostgresqlMessageQueue.Supervisor]
     Supervisor.start_link(children, opts)
   end
 
@@ -29,8 +29,8 @@ defmodule PostgresqlMessageBroker.Application do
       base + jitter
     end
 
-    {PostgresqlMessageBroker.Messaging.OutboxProcessor,
-     queue: PostgresqlMessageBroker.Messaging.global_queue(),
+    {PostgresqlMessageQueue.Messaging.OutboxProcessor,
+     queue: PostgresqlMessageQueue.Messaging.global_queue(),
      concurrency: 5,
      backoff_ms: backoff_ms}
   end

@@ -1,13 +1,13 @@
-defmodule PostgresqlMessageBroker.Messaging.OutboxBroadwayProducer do
+defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
   @moduledoc """
   A Broadway producer that emits messages from a specified queue.
   """
 
   alias __MODULE__, as: Self
 
-  alias PostgresqlMessageBroker.Messaging
-  alias PostgresqlMessageBroker.Messaging.Message
-  alias PostgresqlMessageBroker.Messaging.OutboxWatcher
+  alias PostgresqlMessageQueue.Messaging
+  alias PostgresqlMessageQueue.Messaging.Message
+  alias PostgresqlMessageQueue.Messaging.OutboxWatcher
 
   use GenStage
 

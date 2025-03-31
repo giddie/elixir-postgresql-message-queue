@@ -1,14 +1,14 @@
-defmodule PostgresqlMessageBroker.Messaging.OutboxProcessor do
+defmodule PostgresqlMessageQueue.Messaging.OutboxProcessor do
   @moduledoc """
-  Processes messages in the outbox by calling `PostgresqlMessageBroker.Messaging.process_outbox_batch/1`. When there are no more
+  Processes messages in the outbox by calling `PostgresqlMessageQueue.Messaging.process_outbox_batch/1`. When there are no more
   messages in the queue, OutboxWatcher is used to wait for notification of a new message.
   """
 
   alias __MODULE__, as: Self
-  alias PostgresqlMessageBroker.Messaging
-  alias PostgresqlMessageBroker.Messaging.Message
-  alias PostgresqlMessageBroker.Messaging.OutboxBroadwayProducer
-  alias PostgresqlMessageBroker.Persistence.Repo
+  alias PostgresqlMessageQueue.Messaging
+  alias PostgresqlMessageQueue.Messaging.Message
+  alias PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer
+  alias PostgresqlMessageQueue.Persistence.Repo
 
   require Logger
 

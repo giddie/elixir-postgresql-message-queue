@@ -2,11 +2,11 @@ import Config
 
 config :logger, level: :info
 
-config :postgresql_message_broker, ecto_repos: [PostgresqlMessageBroker.Persistence.Repo]
+config :postgresql_message_queue, ecto_repos: [PostgresqlMessageQueue.Persistence.Repo]
 
-config :postgresql_message_broker, PostgresqlMessageBroker.Messaging,
+config :postgresql_message_queue, PostgresqlMessageQueue.Messaging,
   broadcast_listeners: [
-    {PostgresqlMessageBroker.ExampleUsage, ["ExampleUsage.Events.*"]}
+    {PostgresqlMessageQueue.ExampleUsage, ["ExampleUsage.Events.*"]}
   ]
 
 # Import environment specific config. This must remain at the bottom
