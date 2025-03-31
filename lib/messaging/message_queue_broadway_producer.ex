@@ -84,12 +84,14 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
           :error -> :none
         end
 
-      # This is chosen so that it's always possible to fetch enough batches in parallel to cover all the demand we could
-      # receive. The value of concurrency is the maximum demand we could receive (thanks to max_demand configured on the
-      # call to `Broadway.start_link` in `MessageQueueProcessor`).
+      # This is chosen so that it's always possible to fetch enough batches in parallel to cover
+      # all the demand we could receive. The value of concurrency is the maximum demand we
+      # could receive (thanks to max_demand configured on the call to `Broadway.start_link` in
+      # `MessageQueueProcessor`).
       #
-      # NOTE: It's particularly important that when concurrency = 1, we should only be retrieving one batch at a time,
-      #       because in this case we're expecting messages to be processed in strict sequence.
+      # NOTE: It's particularly important that when concurrency = 1, we should only be retrieving
+      # one batch at a time, because in this case we're expecting messages to be processed in
+      # strict sequence.
       max_batches_in_flight = ceil(concurrency / batch_size)
 
       %Self{
@@ -126,8 +128,9 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
   def init(opts \\ []) do
     state = State.new(opts)
 
-    # Monitor the MessageQueueWatcher, because if we are relying on it to inform us of new messages and its db connection
-    # dies, we need to check our queue and subscribe again. We don't handle this message, so we'll just die.
+    # Monitor the MessageQueueWatcher, because if we are relying on it to inform us of new
+    # messages and its db connection dies, we need to check our queue and subscribe again. We
+    # don't handle this message, so we'll just die.
     Process.monitor(MessageQueueWatcher)
 
     Logger.info(log_prefix(state) <> "Started")
@@ -153,9 +156,9 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
 
     num_messages = Enum.count(messages)
 
-    # We spin up a task that listens for exactly as many `:successful` messages from the `ack/3` function as we have
-    # messages. Once all the messages have been received, we reply to this call. That way the call blocks until all the
-    # messages have been acked.
+    # We spin up a task that listens for exactly as many `:successful` messages from the `ack/3`
+    # function as we have messages. Once all the messages have been received, we reply to this
+    # call. That way the call blocks until all the messages have been acked.
     {:ok, batch_ack_pid} =
       Task.start_link(fn ->
         Enum.reduce_while(1..num_messages//1, :successful, fn
@@ -170,8 +173,9 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
         end)
       end)
 
-    # Note how when wrapping our message in the broadway message struct, we define how to ack the message by storing the
-    # pid of the task we created above, which is waiting for these ack messages.
+    # Note how when wrapping our message in the broadway message struct, we define how to ack the
+    # message by storing the pid of the task we created above, which is waiting for these ack
+    # messages.
     broadway_messages =
       Enum.map(messages, fn %Message{} = message ->
         %Broadway.Message{
@@ -214,8 +218,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
           max_new_batches = state.max_batches_in_flight - state.num_batches_in_flight
           num_new_batches = min(batches_required, max_new_batches)
 
-          # This will be quick, because starting to process a batch involves just launching an async task that will send us
-          # the messages for the batch.
+          # This will be quick, because starting to process a batch involves just launching an
+          # async task that will send us the messages for the batch.
           Enum.reduce(1..num_new_batches//1, state, fn _index, state ->
             start_processing_new_batch(state)
           end)
@@ -254,15 +258,16 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
         send(self(), :process_demand)
 
       result == :empty_queue ->
-        # We ran out of messages in the queue, but still have pending demand. We want to suspend processing until there
-        # is a message to process.
+        # We ran out of messages in the queue, but still have pending demand. We want to suspend
+        # processing until there is a message to process.
 
-        # Note that the MessageQueueWatcher notification happens only once, when the next message is
-        # inserted into the database (and any wrapping transaction commits), and arrives as a call to
-        # MessageQueueProcessor.check_for_new_messages/1.
+        # Note that the MessageQueueWatcher notification happens only once, when the next message
+        # is inserted into the database (and any wrapping transaction commits), and arrives as a
+        # call to MessageQueueProcessor.check_for_new_messages/1.
         MessageQueueWatcher.notify_on_new_message(state.queue)
 
-        # Messages could have arrived between this batch returning empty and the above subscription coming into effect.
+        # Messages could have arrived between this batch returning empty and the above
+        # subscription coming into effect.
         case Messaging.get_queue_processable_state(state.queue) do
           :empty ->
             # We can just wait for the MessageQueueWatcher to tell us when a new message arrives.
@@ -272,7 +277,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
             send(self(), :process_demand)
 
           {:after, %DateTime{} = processable_after} ->
-            # The only messages in the queue are not processable yet, but we know when they will become processable.
+            # The only messages in the queue are not processable yet, but we know when they will
+            # become processable.
             processable_in_ms = DateTime.diff(processable_after, DateTime.utc_now(), :millisecond)
             Process.send_after(self(), :process_demand, processable_in_ms)
             :ok
@@ -286,7 +292,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
   def ack(batch_ack_pid = _ack_ref, successful, failed)
       when is_list(successful) and is_list(failed) do
     if failed == [] do
-      # The recipient is just counting messages to ack the whole batch, so we don't care about specific message details.
+      # The recipient is just counting messages to ack the whole batch, so we don't care about
+      # specific message details.
       Enum.each(successful, fn %Broadway.Message{} -> send(batch_ack_pid, :successful) end)
     else
       send(batch_ack_pid, {:failed, failed})
@@ -299,8 +306,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
   defp start_processing_new_batch(%State{} = state) do
     server_pid = self()
 
-    # This will be called to handle the new batch of messages. The whole batch of messages will be acked so long as this
-    # returns :ok. Otherwise, the whole batch will fail and be re-delivered.
+    # This will be called to handle the new batch of messages. The whole batch of messages will be
+    # acked so long as this returns :ok. Otherwise, the whole batch will fail and be re-delivered.
     message_handler = fn messages ->
       case GenStage.call(server_pid, {:process_messages, messages}, :infinity) do
         :successful -> :ok
@@ -310,8 +317,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
 
     Task.start_link(fn ->
       try do
-        # This call will block until the handler returns, which doesn't happen until all the messages from the batch are
-        # processed.
+        # This call will block until the handler returns, which doesn't happen until all the
+        # messages from the batch are processed.
         num_processed =
           Messaging.process_message_queue_batch(
             state.queue,
@@ -337,15 +344,17 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
       end
     end)
 
-    # We've launched our async task requesting messages. At some point the handler will be called, and we'll see the
-    # messages in a `:process_messages` call, which will cause the demand to be fulfilled.
+    # We've launched our async task requesting messages. At some point the handler will be called,
+    # and we'll see the messages in a `:process_messages` call, which will cause the demand to be
+    # fulfilled.
     %{state | num_batches_in_flight: state.num_batches_in_flight + 1}
   end
 
-  # Tries to "rescue" the failed message by re-enqueuing it to be retried later, avoiding the need to return the whole
-  # batch to the queue for a retry. This could by disabled (e.g. when messages must be processed in order, or simply
-  # when no backoff is configured), or it could fail (if we can't re-enqueue the message for some reason). If this
-  # fails, the whole batch will be returned to the queue.
+  # Tries to "rescue" the failed message by re-enqueuing it to be retried later, avoiding the need
+  # to return the whole batch to the queue for a retry. This could by disabled (e.g. when messages
+  # must be processed in order, or simply when no backoff is configured), or it could fail (if we
+  # can't re-enqueue the message for some reason). If this fails, the whole batch will be returned
+  # to the queue.
   @spec handle_failed_messages([Broadway.Message.t()], State.t()) :: :ok | {:error, any()}
   defp handle_failed_messages(messages, %State{} = state) do
     error_response = fn extra_detail when is_list(extra_detail) ->
@@ -380,8 +389,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
     attempt = Map.get(message.metadata, "attempt", 1)
     backoff_ms = backoff_ms_for_attempt(state, attempt)
 
-    # The stacktrace is logged before sending the {:finished_processing_batch, :failed} message. It is a bit noisy, so
-    # we can strip it out here to keep messages clear.
+    # The stacktrace is logged before sending the {:finished_processing_batch, :failed} message.
+    # It is a bit noisy, so we can strip it out here to keep messages clear.
     # https://hexdocs.pm/broadway/Broadway.Message.html#t:t/0
     message_error =
       with {cause, reason, stacktrace}
@@ -397,9 +406,10 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
     new_metadata = Map.put(message.metadata, "attempt", attempt + 1)
     message = %{message | metadata: new_metadata}
 
-    # Note that because this function is called as part of the handler for `Messaging.process_message_queue_batch/2`, the
-    # re-enqueued message is inserted in the same transaction that is locking the original messages. So either the
-    # transaction commits, deleting the original message record, or the whole transaction is rolled back and the
+    # Note that because this function is called as part of the handler for
+    # `Messaging.process_message_queue_batch/2`, the re-enqueued message is inserted in the same
+    # transaction that is locking the original messages. So either the transaction commits,
+    # deleting the original message record, or the whole transaction is rolled back and the
     # re-enqueued message is not inserted.
     Messaging.broadcast_messages!(
       [message],
