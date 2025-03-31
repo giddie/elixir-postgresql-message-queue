@@ -72,8 +72,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       %Message{type: "Test.Event.FirstEvent"} ->
         send(test_pid, {:received_event, :first, self()})
 
-        # This message should never actually be committed to the database due to the handler returning an error tuple,
-        # so it'll never be processed.
+        # This message should never actually be committed to the database due to the handler
+        # returning an error tuple, so it'll never be processed.
         [%Message{type: "Test.Event.SecondEvent", schema_version: 1, payload: %{}}]
         |> Messaging.broadcast_messages!(to_queue: queue)
 
@@ -97,13 +97,13 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
 
     assert {:received_event, :first, handler_pid} = next_message()
 
-    # Only the FirstEvent message should still be in the queue. (It's currently being processed.) The SecondEvent
-    # message should be invisible inside the handler's transaction.
+    # Only the FirstEvent message should still be in the queue. (It's currently being processed.)
+    # The SecondEvent message should be invisible inside the handler's transaction.
     assert %{^queue => [%Message{type: "Test.Event.FirstEvent"}]} =
              Messaging.peek_at_message_queue_messages()
 
-    # The message handler should fail, and the message is retried. The queue should still look the same after the
-    # handler failed the message.
+    # The message handler should fail, and the message is retried. The queue should still look the
+    # same after the handler failed the message.
     send(handler_pid, {:continue, :error})
     assert {:received_event, :first, ^handler_pid} = next_message()
 
@@ -152,7 +152,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
 
     send(handler_pid, :continue)
 
-    # NOTE: We expect both events to have been processed by the same pid, because we haven't configured any concurrency.
+    # NOTE: We expect both events to have been processed by the same pid, because we haven't
+    # configured any concurrency.
     assert {:received_event, :second, ^handler_pid} = next_message()
   end
 
@@ -250,20 +251,24 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       |> Messaging.broadcast_messages!(to_queue: queue)
     end)
 
-    # The batch size is 1, so the first event should be processed, and the second event should be pending.
+    # The batch size is 1, so the first event should be processed, and the second event should be
+    # pending.
     assert {:processing_first_event, handler_pid} = next_message()
     refute_receive :received_second_event
 
-    # If max_demand isn't set to 1 for the Broadway processor, we can trigger a bug by asking the MessageQueueProcessor to
-    # check for new messages at this point, and it will fetch the second event message because demand > 0. As a result,
-    # when the first message fails the second will be delivered first, instead of retrying the first.
+    # If max_demand isn't set to 1 for the Broadway processor, we can trigger a bug by asking the
+    # MessageQueueProcessor to check for new messages at this point, and it will fetch the second
+    # event message because demand > 0. As a result, when the first message fails the second will
+    # be delivered first, instead of retrying the first.
     MessageQueueProcessor.check_for_new_messages(queue)
     Process.sleep(100)
 
-    # We instruct the handler for the first event to raise an exception. The message should fail and be retried.
+    # We instruct the handler for the first event to raise an exception. The message should fail
+    # and be retried.
     send(handler_pid, {:run, fn -> raise "Test: Exception in handler!" end})
 
-    # The second message should still not be processed, because we need to retry the first message.
+    # The second message should still not be processed, because we need to retry the first
+    # message.
     refute_receive :received_second_event
 
     # A non-:ok response from the handler should have the same result
@@ -297,9 +302,10 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
         :ok
     end
 
-    # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
-    # which case the message will be retried immediately. Note that because no concurrency is specified, the queue must
-    # be processed sequentially, so the backoff blocks the whole queue.
+    # In this case the backoff is configured to process the failed message after a fixed interval.
+    # This could be 0, in which case the message will be retried immediately. Note that because no
+    # concurrency is specified, the queue must be processed sequentially, so the backoff blocks
+    # the whole queue.
     start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler, backoff_ms: 1_000})
 
     Repo.transaction(fn ->
@@ -310,7 +316,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       |> Messaging.broadcast_messages!(to_queue: queue)
     end)
 
-    # The batch size is 1, so the first event should be processed, and the second event should be pending.
+    # The batch size is 1, so the first event should be processed, and the second event should be
+    # pending.
     assert {:processing_first_event, handler_pid} = next_message()
     refute_receive :received_second_event
 
@@ -320,17 +327,19 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     # The second message should still not be processed, because we need to retry the first message.
     refute_receive :received_second_event
 
-    # We waited up to 100ms for that second event. That first message shouldn't be retried for another ~900ms.
+    # We waited up to 100ms for that second event. That first message shouldn't be retried for
+    # another ~900ms.
     refute_receive _, 800
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
 
-    # We fail a second time, to check that exceptions are caught, and the same backoff interval should be used.
+    # We fail a second time, to check that exceptions are caught, and the same backoff interval
+    # should be used.
     send(handler_pid, {:run, fn -> raise "Test: Exception in handler!" end})
     refute_receive _, 900
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
 
-    # This time we're checking that exceptions in inner db transactions shouldn't cause any issues to the backoff
-    # mechanism.
+    # This time we're checking that exceptions in inner db transactions shouldn't cause any issues
+    # to the backoff mechanism.
     send(
       handler_pid,
       {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end}
@@ -339,7 +348,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     refute_receive _, 900
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
 
-    # This time we're checking that inner db transaction rollbacks shouldn't cause any issues to the backoff mechanism.
+    # This time we're checking that inner db transaction rollbacks shouldn't cause any issues to
+    # the backoff mechanism.
     send(
       handler_pid,
       {:run, fn -> Repo.transaction(fn -> Repo.rollback("test rollback") end) end}
@@ -372,8 +382,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
         :ok
     end
 
-    # In this case the backoff is configured to process the failed message after one second, and then on the second and
-    # subsequent failures to process it again after two seconds.
+    # In this case the backoff is configured to process the failed message after one second, and
+    # then on the second and subsequent failures to process it again after two seconds.
     backoff_ms_func = fn
       1 -> 1_000
       _ -> 2_000
@@ -391,7 +401,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       |> Messaging.broadcast_messages!(to_queue: queue)
     end)
 
-    # The batch size is 1, so the first event should be processed, and the second event should be pending.
+    # The batch size is 1, so the first event should be processed, and the second event should be
+    # pending.
     assert {:processing_first_event, handler_pid} = next_message()
     refute_receive :received_second_event
 
@@ -401,12 +412,13 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     # The second message should still not be processed, because we need to retry the first message.
     refute_receive :received_second_event
 
-    # We waited up to 100ms for that second event. That first message shouldn't be retried for another ~900ms.
+    # We waited up to 100ms for that second event. That first message shouldn't be retried for
+    # another ~900ms.
     refute_receive _, 800
     assert {:processing_first_event, handler_pid} = next_message(wait_ms: 200)
 
-    # We fail a second time, to check that we progress to the second backoff interval. And this time we use an exception
-    # to check this is caught correctly too.
+    # We fail a second time, to check that we progress to the second backoff interval. And this
+    # time we use an exception to check this is caught correctly too.
     send(handler_pid, {:run, fn -> raise "Test: Exception in handler!" end})
     refute_receive _, 1_900
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
@@ -424,7 +436,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     send(handler_pid, {:run, fn -> :ok end})
     assert :received_second_event = next_message()
 
-    # Check that after success, the number of attempts passed into the backoff_ms function is reset.
+    # Check that after success, the number of attempts passed into the backoff_ms function is
+    # reset.
     Repo.transaction(fn ->
       [
         %Message{type: "Test.Event.FirstEvent", schema_version: 1, payload: %{}},
@@ -462,7 +475,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
         :ok
     end
 
-    # In this case the backoff function will crash, but the message queue processor should fall back to a sensible default.
+    # In this case the backoff function will crash, but the message queue processor should fall
+    # back to a sensible default.
     backoff_ms_func = fn
       1 -> raise "Test backoff_ms_func exception!"
     end
@@ -479,20 +493,23 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       |> Messaging.broadcast_messages!(to_queue: queue)
     end)
 
-    # The batch size is 1, so the first event should be processed, and the second event should be pending.
+    # The batch size is 1, so the first event should be processed, and the second event should be
+    # pending.
     assert {:processing_first_event, handler_pid} = next_message()
     refute_receive :received_second_event
 
     # We instruct the handler for the first event to fail. The message should fail and be retried.
     send(handler_pid, {:run, fn -> {:error, :test} end})
 
-    # The second message should still not be processed, because we need to retry the first message.
+    # The second message should still not be processed, because we need to retry the first
+    # message.
     refute_receive :received_second_event
 
     # The backoff should apply even if we ask the processor to check for messages.
     :ok = Messaging.MessageQueueProcessor.check_for_new_messages(queue)
 
-    # We waited up to 100ms for that second event. That first message shouldn't be retried for another ~900ms.
+    # We waited up to 100ms for that second event. That first message shouldn't be retried for
+    # another ~900ms.
     refute_receive _, 800
     assert {:processing_first_event, handler_pid} = next_message(wait_ms: 200)
 
@@ -530,9 +547,10 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
         :ok
     end
 
-    # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
-    # which case the message will be retried immediately. Note that because no concurrency is specified, the queue must
-    # be processed sequentially, so the backoff blocks the whole queue.
+    # In this case the backoff is configured to process the failed message after a fixed interval.
+    # This could be 0, in which case the message will be retried immediately. Note that because no
+    # concurrency is specified, the queue must be processed sequentially, so the backoff blocks
+    # the whole queue.
     start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler, backoff_ms: 1_000})
 
     Repo.transaction(fn ->
@@ -542,12 +560,12 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
 
     assert {:processing_first_event, handler_pid} = next_message()
 
-    # We instruct the handler for the first event to fail. The message should fail and be re-enqueued at
-    # the end of the queue.
+    # We instruct the handler for the first event to fail. The message should fail and be
+    # re-enqueued at the end of the queue.
     send(handler_pid, {:run, fn -> {:error, :test} end})
 
-    # Wait a little to ensure the processor sees an empty queue and decides to wait until it's time to process the
-    # delayed message.
+    # Wait a little to ensure the processor sees an empty queue and decides to wait until it's
+    # time to process the delayed message.
     Process.sleep(200)
 
     # Now we broadcast the second message.
@@ -556,7 +574,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       |> Messaging.broadcast_messages!(to_queue: queue)
     end)
 
-    # We waited 200ms for the backoff logic. That first message shouldn't be retried for another ~800ms.
+    # We waited 200ms for the backoff logic. That first message shouldn't be retried for another
+    # ~800ms.
     refute_receive _, 700
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 200)
 
@@ -601,13 +620,14 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       |> Messaging.broadcast_messages!(to_queue: queue)
     end)
 
-    # NOTE: We expect both events to have been processed by the same pid, because we haven't configured any concurrency.
+    # NOTE: We expect both events to have been processed by the same pid, because we haven't
+    # configured any concurrency.
     assert {:received_event, :first, handler_pid} = next_message()
     refute_received {:received_event, :second, _handler_pid}
 
-    # When the first event is received, the second message should not still be in the message queue, because it should have
-    # been collected as part of the same batch. But the third event should be there because it will be in the next
-    # batch.
+    # When the first event is received, the second message should not still be in the message
+    # queue, because it should have been collected as part of the same batch. But the third event
+    # should be there because it will be in the next batch.
     assert %{^queue => [%Message{type: "Test.Event.ThirdEvent"}]} =
              Messaging.peek_at_message_queue_messages(skip_locked: true)
 
@@ -651,13 +671,14 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       |> Messaging.broadcast_messages!(to_queue: queue)
     end)
 
-    # NOTE: We expect all events to be processed by the same pid, because we haven't configured any concurrency.
+    # NOTE: We expect all events to be processed by the same pid, because we haven't configured
+    # any concurrency.
     assert {:received_event, :first, handler_pid} = next_message()
     assert {:received_event, :second, ^handler_pid} = next_message()
     refute_received {:received_event, :third, _handler_pid}
 
-    # After the handler for the second event fails, we expect the first message to be delivered again, because the first
-    # two events are part of the same batch.
+    # After the handler for the second event fails, we expect the first message to be delivered
+    # again, because the first two events are part of the same batch.
     send(handler_pid, {:run, fn -> :error end})
 
     assert {:received_event, :first, ^handler_pid} = next_message()
@@ -704,8 +725,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     assert_receive {:received_event, :second, second_handler_pid}
     assert first_handler_pid != second_handler_pid
 
-    # Because the first event handler is waiting for us to tell it to continue, the third event will be processed by the
-    # same pid as the second event.
+    # Because the first event handler is waiting for us to tell it to continue, the third event
+    # will be processed by the same pid as the second event.
     assert {:received_event, :third, ^second_handler_pid} = next_message()
 
     send(first_handler_pid, :continue)
@@ -758,8 +779,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     assert_receive {:received_event, :first, first_handler_pid}
     send(first_handler_pid, :continue)
 
-    # The second message is still processing. It should not have been killed and retried by the failure of the first
-    # message.
+    # The second message is still processing. It should not have been killed and retried by the
+    # failure of the first message.
     refute_receive {:received_event, :second, _second_handler_pid}, 500
 
     send(second_handler_pid, :continue)
@@ -828,8 +849,9 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
         :ok
     end
 
-    # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
-    # which case the message will be processed immediately after any other messages that are already in the queue.
+    # In this case the backoff is configured to process the failed message after a fixed interval.
+    # This could be 0, in which case the message will be processed immediately after any other
+    # messages that are already in the queue.
     start_link_supervised!(
       {MessageQueueProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000}
     )
@@ -847,23 +869,26 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     assert_receive {:received_event, :second, second_handler_pid}
     refute_receive {:received_event, :third}
 
-    # We instruct the handler for the first event to fail. The message should fail and be re-enqueued at
-    # the end of the queue.
+    # We instruct the handler for the first event to fail. The message should fail and be
+    # re-enqueued at the end of the queue.
     send(first_handler_pid, {:run, fn -> {:error, :test} end})
 
     # The third message should be processed now.
     assert {:received_event, :third} = next_message()
 
-    # We waited up to 100ms for that third event. That first message shouldn't be retried for another ~900ms.
+    # We waited up to 100ms for that third event. That first message shouldn't be retried for
+    # another ~900ms.
     refute_receive _, 800
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
 
-    # We fail a second time, to check that exceptions are caught, and the same backoff interval should be used.
+    # We fail a second time, to check that exceptions are caught, and the same backoff interval
+    # should be used.
     send(first_handler_pid, {:run, fn -> raise "Test: Exception in handler!" end})
     refute_receive _, 900
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 400)
 
-    # This time we're checking that exceptions in inner db transactions shouldn't cause any issues to the backoff mechanism.
+    # This time we're checking that exceptions in inner db transactions shouldn't cause any issues
+    # to the backoff mechanism.
     send(
       first_handler_pid,
       {:run, fn -> Repo.transaction(fn -> raise "Test: Exception in handler!" end) end}
@@ -872,7 +897,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     refute_receive _, 900
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
 
-    # This time we're checking that inner db transaction rollbacks shouldn't cause any issues to the backoff mechanism.
+    # This time we're checking that inner db transaction rollbacks shouldn't cause any issues to
+    # the backoff mechanism.
     send(
       first_handler_pid,
       {:run, fn -> Repo.transaction(fn -> Repo.rollback("test rollback") end) end}
@@ -914,8 +940,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
         :ok
     end
 
-    # In this case the backoff is configured to process the failed message after one second, and then on the second and
-    # subsequent failures to process it again after two seconds.
+    # In this case the backoff is configured to process the failed message after one second, and
+    # then on the second and subsequent failures to process it again after two seconds.
     backoff_ms_func = fn
       1 -> 1_000
       _ -> 2_000
@@ -939,19 +965,20 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     assert_receive {:received_event, :second, second_handler_pid}
     refute_receive {:received_event, :third}
 
-    # We instruct the handler for the first event to fail. The message should fail and be re-enqueued at
-    # the end of the queue.
+    # We instruct the handler for the first event to fail. The message should fail and be
+    # re-enqueued at the end of the queue.
     send(first_handler_pid, {:run, fn -> {:error, :test} end})
 
     # The third message should be processed now.
     assert {:received_event, :third} = next_message()
 
-    # We waited up to 100ms for that second event. That first message shouldn't be retried for another ~900ms.
+    # We waited up to 100ms for that second event. That first message shouldn't be retried for
+    # another ~900ms.
     refute_receive _, 800
     assert {:received_event, :first, first_handler_pid} = next_message(wait_ms: 200)
 
-    # We fail a second time, to check that we progress to the second backoff interval. And this time we use an exception
-    # to check this is caught correctly too.
+    # We fail a second time, to check that we progress to the second backoff interval. And this
+    # time we use an exception to check this is caught correctly too.
     send(first_handler_pid, {:run, fn -> raise "Test: Exception in handler!" end})
     refute_receive _, 1_900
     assert {:received_event, :first, ^first_handler_pid} = next_message(wait_ms: 200)
@@ -998,8 +1025,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
         :ok
     end
 
-    # In this case the backoff is configured to process the failed message after one second, and then on the second and
-    # subsequent failures to process it again after two seconds.
+    # In this case the backoff is configured to process the failed message after one second, and
+    # then on the second and subsequent failures to process it again after two seconds.
     backoff_ms_func = fn
       1 -> raise "Test backoff_ms_func exception!"
     end
@@ -1022,12 +1049,13 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     assert_receive {:received_event, :second, second_handler_pid}
     refute_receive {:received_event, :third}
 
-    # We instruct the handler for the first event to fail. The message should fail and be re-enqueued at
-    # the end of the queue.
+    # We instruct the handler for the first event to fail. The message should fail and be
+    # re-enqueued at the end of the queue.
     send(first_handler_pid, {:run, fn -> {:error, :test} end})
 
-    # We would expect the third message to be processed now, but because the backoff_ms function failed, the
-    # re-enqueueing backoff failed, and instead the whole queue is backing off and will retry the first message.
+    # We would expect the third message to be processed now, but because the backoff_ms function
+    # failed, the re-enqueueing backoff failed, and instead the whole queue is backing off and
+    # will retry the first message.
     refute_receive _, 900
     assert {:received_event, :first, first_handler_pid} = next_message(wait_ms: 200)
 
@@ -1074,8 +1102,9 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
         :ok
     end
 
-    # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
-    # which case the message will be processed immediately after any other messages that are already in the queue.
+    # In this case the backoff is configured to process the failed message after a fixed interval.
+    # This could be 0, in which case the message will be processed immediately after any other
+    # messages that are already in the queue.
     start_link_supervised!(
       {MessageQueueProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000}
     )
@@ -1085,15 +1114,16 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
       |> Messaging.broadcast_messages!(to_queue: queue)
     end)
 
-    # The batch size is 1, so the first event should be processed, and the second event should be pending.
+    # The batch size is 1, so the first event should be processed, and the second event should be
+    # pending.
     assert {:processing_first_event, handler_pid} = next_message()
 
-    # We instruct the handler for the first event to fail. The message should fail and be re-enqueued at
-    # the end of the queue.
+    # We instruct the handler for the first event to fail. The message should fail and be
+    # re-enqueued at the end of the queue.
     send(handler_pid, {:run, fn -> {:error, :test} end})
 
-    # Wait a little to ensure the processor sees an empty queue and decides to wait until it's time to process the
-    # delayed message.
+    # Wait a little to ensure the processor sees an empty queue and decides to wait until it's
+    # time to process the delayed message.
     Process.sleep(200)
 
     # Now we broadcast the second message.
@@ -1105,8 +1135,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
     # It should be processed immediately.
     assert :received_second_event = next_message()
 
-    # We waited up to 100ms for that second event and 200ms for the backoff logic. That first message shouldn't be
-    # retried for another ~700ms.
+    # We waited up to 100ms for that second event and 200ms for the backoff logic. That first
+    # message shouldn't be retried for another ~700ms.
     refute_receive _, 600
     assert {:processing_first_event, ^handler_pid} = next_message(wait_ms: 400)
 

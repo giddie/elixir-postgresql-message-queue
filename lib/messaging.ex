@@ -31,7 +31,8 @@ defmodule PostgresqlMessageQueue.Messaging do
 
   defmodule Message do
     @moduledoc """
-    A message that conforms to a specific schema, represented by the `type` and `schema_version` fields.
+    A message that conforms to a specific schema, represented by the `type` and `schema_version`
+    fields.
     """
 
     @enforce_keys [:type, :schema_version, :payload]
@@ -134,7 +135,8 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  Same as `broadcast_messages!/1`, but raises a `#{SerializationError}` instead of returning an `:error` tuple.
+  Same as `broadcast_messages!/1`, but raises a `#{SerializationError}` instead of returning an
+  `:error` tuple.
   """
   @spec broadcast_messages!([Message.t()], broadcast_opts()) :: :ok
   def broadcast_messages!(messages, opts \\ []) do
@@ -145,9 +147,15 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  Stores the given messages in the specified message queue. A queue must be specified with the
-  `:to_queue` key in `opts`, and can be any arbitrary string. You can use `global_queue()` for
-  convenience.
+  Stores the given messages in the specified message queue. A queue must be specified in `opts`.
+
+  ## Options
+  * `to_queue`: Specifies the queue to add the message to. Can be any string. You can use
+      `global_queue()` for convenience.
+  * `process_after`: Delays message processing for a later time. May be:
+    * a DateTime struct
+    * a {count, unit} tuple such as {3, :second}, {5, :minute} - anything supported by
+      `DateTime.add/4`.
 
   This function will raise an exception if there is no active database transaction. This is
   intended to help ensure that messages are stored atomically along with other associated changes.
@@ -190,9 +198,10 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  Stores the given messages in the message_queue, which is a database table that acts as a transactional
-  staging area for messages awaiting dispatch to the message queue. The `#{MessageQueueProcessor}` is
-  responsible for picking up the messages and delivering them using `process_message_queue_batch/1`.
+  Stores the given messages in the message_queue, which is a database table that acts as
+  a transactional staging area for messages awaiting dispatch to the message queue. The
+  `#{MessageQueueProcessor}` is responsible for picking up the messages and delivering them using
+  `process_message_queue_batch/1`.
   """
   @spec store_message_in_message_queue(Message.t(), String.t(), :now | {:after, DateTime.t()}) ::
           :ok | {:error, SerializationError.t()}
@@ -233,9 +242,9 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  List messages in the message queue awaiting delivery to the message queue. This is useful mainly
-  for tests, when the `#{MessageQueueProcessor}` is not running. You can use this function to
-  check that the code under test has dispatched the expected messages.
+  List messages in the message queue awaiting delivery. This is useful mainly for tests, when the
+  `#{MessageQueueProcessor}` is not running. You can use this function to check that the code
+  under test has dispatched the expected messages.
   """
   @spec peek_at_message_queue_messages(
           skip_locked: boolean(),
@@ -306,8 +315,8 @@ defmodule PostgresqlMessageQueue.Messaging do
         :error -> &deliver_messages_to_handlers!/1
       end
 
-    # Note that the transaction only commits after all the messages are processed, so the messages are in fact not
-    # deleted until everything has been processed successfully.
+    # Note that the transaction only commits after all the messages are processed, so the messages
+    # are in fact not deleted until everything has been processed successfully.
     Repo.transaction(fn ->
       {:ok, messages} =
         Queries.get_and_delete_message_queue_batch(
@@ -355,12 +364,12 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  Delivers the provided messages to a set of modules implementing the `MessageHandler` behaviour. The handler
-  configuration looks like this:
+  Delivers the provided messages to a set of modules implementing the `MessageHandler` behaviour.
+  The handler configuration looks like this:
 
      [
        {MyContext.MyMessageHandler, ["MyContext.Commands.*", "AnotherContext.Events.*"]},
-       {AnotherContext.EventProcessor, ["AnotherContext.Events.*"]}
+       {MyLogger.EventLogger, ["*.Events.*"]}
      ]
 
   See `type_filter_matches_path?/2` for details on the message type filtering.

@@ -3,6 +3,27 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessor do
   Processes messages in the message queue by calling
   `PostgresqlMessageQueue.Messaging.process_message_queue_batch/1`. When there are no more
   messages in the queue, MessageQueueWatcher is used to wait for notification of a new message.
+
+  ## Options
+
+  * `queue`: Each processor targets a single queue, specified by this string.
+  * `concurrency`: The number of messages that may be processed from the queue simultaneously.
+      Be aware that if this number is > 1, your messages are no longer guaranteed to be processed
+      in strict order. The default value is 1.
+  * `handler`: A custom message handler function. If specified, each message will be passed to
+      this function as a `Messaging.Message.t()` struct, and the function must return `:ok`. If
+      the function fails, the message will be returned to the queue. If this is not specified, the
+      `Messaging.deliver_message_to_handlers!/1` function will be used by default.
+  * `batch_size`: Specifies how many messages to fetch from the queue with each db query.
+      Increasing this could improve throughput, but a failure to process any message in the batch
+      will cause the whole batch to be retried.
+  * `backoff_ms`: Specifies retry backoff behaviour in case of a failure when processing a
+      message. This can be an integer, but it's more useful to provide a function, which will
+      receive an integer argument representing the number of attempts that have been made to
+      process the message, and must return the number of milliseconds to wait before trying again.
+      By default, there is no backoff mechanism, and all messages are retried instantly.
+
+  See also the documentation for `PostgresqlMessageQueue.Messaging.process_message_queue_batch/1`.
   """
 
   alias __MODULE__, as: Self
@@ -76,8 +97,8 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessor do
 
   @doc """
   Pay special attention to `concurrency`: this specifies the number of processes that may call
-  `Messaging.process_message_queue_batch/2` simultaneously. This must be 1 (the default) if it is important for messages to be
-  processed in-order.
+  `Messaging.process_message_queue_batch/2` simultaneously. This must be 1 (the default) if it is
+  important for messages to be processed in-order.
   """
   @spec start_link(Keyword.t()) :: {:ok, pid()}
   def start_link(opts \\ []) do
@@ -93,8 +114,9 @@ defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessor do
       processors: [
         default: [
           concurrency: opts[:concurrency],
-          # If max_demand > 1, then failed messages may be retried out-of-order, because the next message has already
-          # been queued up by the time the failed message is returned to the queue.
+          # If max_demand > 1, then failed messages may be retried out-of-order, because the next
+          # message has already been queued up by the time the failed message is returned to the
+          # queue.
           max_demand: 1
         ]
       ]
