@@ -4,7 +4,7 @@ defmodule PostgresqlMessageQueue.Messaging do
   """
 
   alias __MODULE__, as: Self
-  alias PostgresqlMessageQueue.Messaging.OutboxProcessor
+  alias PostgresqlMessageQueue.Messaging.MessageQueueProcessor
   alias PostgresqlMessageQueue.Persistence.Repo
 
   require AyeSQL
@@ -145,21 +145,21 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  Begins asynchronously delivering the given messages to all the message handlers specified in the `broadcast_listeners`
-  config for `#{Self}`.
+  Stores the given messages in the specified message queue. A queue must be specified with the
+  `:to_queue` key in `opts`, and can be any arbitrary string. You can use `global_queue()` for
+  convenience.
 
-  To ensure that messages _will_ eventually be delivered if this function succeeds, we use an **outbox pattern**, as
-  described below. For this reason you _must_ call this function within an existing database transaction. That way,
-  if something prevents the messages from being stored, the whole transaction will roll back, undoing any action the
-  calling code did prior to requesting broadcast of the messages.
-
-  This function will raise an exception if there is no active database transaction.
+  This function will raise an exception if there is no active database transaction. This is
+  intended to help ensure that messages are stored atomically along with other associated changes.
+  For instance, an event representing a change in state should be committed to the queue in the
+  same transaction as the update that stores the state change.
 
   ## In this function:
-  * Store the messages in the outbox (see `store_message_in_outbox/1`)
+  * Store the messages in the message_queue (see `store_message_in_message_queue/1`)
 
   ## Asynchronously
-  * `#{OutboxProcessor}` calls `process_outbox_batch/1` automatically when messages are stored in the outbox.
+  * `#{MessageQueueProcessor}` calls `process_message_queue_batch/1` automatically when messages
+  are stored in the message_queue.
   """
   @spec broadcast_messages([Message.t()], broadcast_opts()) ::
           :ok | {:error, SerializationError.t()}
@@ -180,7 +180,7 @@ defmodule PostgresqlMessageQueue.Messaging do
     # Store each message in turn, but stop at the first error.
     result =
       Enum.reduce_while(messages, :ok, fn message, :ok ->
-        case store_message_in_outbox(message, queue, process_after) do
+        case store_message_in_message_queue(message, queue, process_after) do
           :ok -> {:cont, :ok}
           {:error, _reason} = result -> {:halt, result}
         end
@@ -190,16 +190,16 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  Stores the given messages in the outbox, which is a database table that acts as a transactional
-  staging area for messages awaiting dispatch to the message queue. The `#{OutboxProcessor}` is
-  responsible for picking up the messages and delivering them using `process_outbox_batch/1`.
+  Stores the given messages in the message_queue, which is a database table that acts as a transactional
+  staging area for messages awaiting dispatch to the message queue. The `#{MessageQueueProcessor}` is
+  responsible for picking up the messages and delivering them using `process_message_queue_batch/1`.
   """
-  @spec store_message_in_outbox(Message.t(), String.t(), :now | {:after, DateTime.t()}) ::
+  @spec store_message_in_message_queue(Message.t(), String.t(), :now | {:after, DateTime.t()}) ::
           :ok | {:error, SerializationError.t()}
-  def store_message_in_outbox(%Message{} = message, queue, process_after \\ :now)
+  def store_message_in_message_queue(%Message{} = message, queue, process_after \\ :now)
       when is_binary(queue) do
     if not Repo.in_transaction?() do
-      raise "Messages stored in the outbox must be sent within a transaction."
+      raise "Messages stored in the message_queue must be sent within a transaction."
     end
 
     db_record = %{
@@ -216,7 +216,7 @@ defmodule PostgresqlMessageQueue.Messaging do
         end
     }
 
-    {1, nil} = Repo.insert_all("outbox_messages", [db_record])
+    {1, nil} = Repo.insert_all("message_queue_messages", [db_record])
 
     :ok
   rescue
@@ -233,15 +233,16 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  List messages in the outbox awaiting delivery to the message queue. This is useful mainly for
-  tests, when the `#{OutboxProcessor}` is not running. You can use this function to check that the
-  code under test has dispatched the expected messages.
+  List messages in the message queue awaiting delivery to the message queue. This is useful mainly
+  for tests, when the `#{MessageQueueProcessor}` is not running. You can use this function to
+  check that the code under test has dispatched the expected messages.
   """
-  @spec peek_at_outbox_messages(skip_locked: boolean(), limit: pos_integer()) :: %{
-          queue => [Message.t()]
-        }
+  @spec peek_at_message_queue_messages(
+          skip_locked: boolean(),
+          limit: pos_integer()
+        ) :: %{queue => [Message.t()]}
         when queue: String.t()
-  def peek_at_outbox_messages(opts \\ []) do
+  def peek_at_message_queue_messages(opts \\ []) do
     skip_locked = Keyword.get(opts, :skip_locked, false)
     limit = Keyword.get(opts, :limit, 10)
 
@@ -252,7 +253,7 @@ defmodule PostgresqlMessageQueue.Messaging do
         []
       end
 
-    {:ok, messages} = Queries.peek_at_outbox_messages([limit: limit] ++ lock_param)
+    {:ok, messages} = Queries.peek_at_message_queue_messages([limit: limit] ++ lock_param)
 
     Enum.group_by(
       messages,
@@ -267,34 +268,36 @@ defmodule PostgresqlMessageQueue.Messaging do
   end
 
   @doc """
-  Pulls a batch of messages from the outbox (see `store_message_in_outbox/1`), and publishes them using the message
-  queue. If no errors occurred, the messages are then removed from the outbox. The batch_size determines how many
-  messages are retrieved.
+  Pulls a batch of messages from the message queue (see `store_message_in_message_queue/1`), and
+  publishes them using the message queue. If no errors occurred, the messages are then removed
+  from the message_queue. The batch_size determines how many messages are retrieved.
 
   ### Parallel Consumers
 
-  Message records are locked in the database while the messages are being processed. Any other processes that call
-  this function during that time will skip over those messages and retrieve the following ones. This could lead to
-  out-of-order processing, so if message order is important, you need to ensure only one process at a time calls this
-  function.
+  Message records are locked in the database while the messages are being processed. Any other
+  processes that call this function during that time will skip over those messages and retrieve
+  the following ones. This could lead to out-of-order processing, so if message order is
+  important, you need to ensure only one process at a time calls this function.
 
   ### Batch Size
 
-  Processing efficiency may be improved by increasing the batch size. However, any exception that arises during
-  processing of the messages will cause the entire batch transaction to revert, and all of the messages will be
-  re-processed on the following call, including those in the batch that had been processed successfully the first time.
-  So pay attention to idempotency, ensuring that message handlers are able to handle duplicate messages. Since handlers
-  are called within a database transaction that wraps the whole batch, any effects they had in the database should
-  have been reverted, including any new messages they broadcast. Effects outside the database should be avoided when
-  processing messages in batches, to avoid duplicating the external interaction. Instead, broadcast a new message that
-  will be handled by a queue with a batch size of 1.
+  Processing efficiency may be improved by increasing the batch size. However, any exception that
+  arises during processing of the messages will cause the entire batch transaction to revert, and
+  all of the messages will be re-processed on the following call, including those in the batch
+  that had been processed successfully the first time. So pay attention to idempotency, ensuring
+  that message handlers are able to handle duplicate messages. Since handlers are called within
+  a database transaction that wraps the whole batch, any effects they had in the database should
+  have been reverted, including any new messages they broadcast. Effects outside the database
+  should be avoided when processing messages in batches, to avoid duplicating the external
+  interaction. Instead, broadcast a new message that will be handled by a queue with a batch size
+  of 1.
   """
-  @spec process_outbox_batch(String.t(),
+  @spec process_message_queue_batch(String.t(),
           batch_size: pos_integer(),
           handler: message_handler_func()
         ) ::
           non_neg_integer()
-  def process_outbox_batch(queue, opts \\ []) when is_binary(queue) and is_list(opts) do
+  def process_message_queue_batch(queue, opts \\ []) when is_binary(queue) and is_list(opts) do
     batch_size = Keyword.get(opts, :batch_size, 1)
 
     handler =
@@ -307,7 +310,7 @@ defmodule PostgresqlMessageQueue.Messaging do
     # deleted until everything has been processed successfully.
     Repo.transaction(fn ->
       {:ok, messages} =
-        Queries.get_and_delete_outbox_batch(
+        Queries.get_and_delete_message_queue_batch(
           queue: queue,
           limit: batch_size,
           processing_datetime: DateTime.utc_now()
@@ -325,7 +328,7 @@ defmodule PostgresqlMessageQueue.Messaging do
   @spec get_queue_processable_state(String.t()) :: :processable | {:after, DateTime.t()} | :empty
   def get_queue_processable_state(queue) when is_binary(queue) do
     Ecto.Query.from(
-      x in "outbox_messages",
+      x in "message_queue_messages",
       where: x.queue == ^queue,
       select: %{
         count: count(x),

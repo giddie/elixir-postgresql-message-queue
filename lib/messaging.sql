@@ -1,10 +1,10 @@
--- name: peek_at_outbox_messages
+-- name: peek_at_message_queue_messages
   select queue,
          type,
          schema_version,
          payload,
          metadata
-    from outbox_messages
+    from message_queue_messages
 order by id
    limit :limit
   :_lock
@@ -12,14 +12,14 @@ order by id
 -- name: for_update_skip_locked
 for update skip locked
 
--- name: get_and_delete_outbox_batch
+-- name: get_and_delete_message_queue_batch
   with deleted
     as (
            delete
-             from outbox_messages
+             from message_queue_messages
             where id in (
                            select id
-                             from outbox_messages
+                             from message_queue_messages
                             where queue = :queue
                               and (
                                        processable_after is null

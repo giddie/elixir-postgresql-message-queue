@@ -12,8 +12,8 @@ defmodule PostgresqlMessageQueue.Application do
       {PostgresqlMessageQueue.Persistence.NotificationListener,
        name: PostgresqlMessageQueue.Persistence.Repo.NotificationListener,
        repo: PostgresqlMessageQueue.Persistence.Repo},
-      PostgresqlMessageQueue.Messaging.OutboxWatcher,
-      outbox_processor_spec()
+      PostgresqlMessageQueue.Messaging.MessageQueueWatcher,
+      message_queue_processor_spec()
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
@@ -22,14 +22,14 @@ defmodule PostgresqlMessageQueue.Application do
     Supervisor.start_link(children, opts)
   end
 
-  defp outbox_processor_spec() do
+  defp message_queue_processor_spec() do
     backoff_ms = fn attempt when is_integer(attempt) ->
       base = 2 ** (attempt - 1) * 5 - 5
       jitter = Enum.random(-base..base) |> Integer.floor_div(20)
       base + jitter
     end
 
-    {PostgresqlMessageQueue.Messaging.OutboxProcessor,
+    {PostgresqlMessageQueue.Messaging.MessageQueueProcessor,
      queue: PostgresqlMessageQueue.Messaging.global_queue(),
      concurrency: 5,
      backoff_ms: backoff_ms}

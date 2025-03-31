@@ -1,13 +1,14 @@
-defmodule PostgresqlMessageQueue.Messaging.OutboxProcessor do
+defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessor do
   @moduledoc """
-  Processes messages in the outbox by calling `PostgresqlMessageQueue.Messaging.process_outbox_batch/1`. When there are no more
-  messages in the queue, OutboxWatcher is used to wait for notification of a new message.
+  Processes messages in the message queue by calling
+  `PostgresqlMessageQueue.Messaging.process_message_queue_batch/1`. When there are no more
+  messages in the queue, MessageQueueWatcher is used to wait for notification of a new message.
   """
 
   alias __MODULE__, as: Self
   alias PostgresqlMessageQueue.Messaging
   alias PostgresqlMessageQueue.Messaging.Message
-  alias PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer
+  alias PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer
   alias PostgresqlMessageQueue.Persistence.Repo
 
   require Logger
@@ -68,14 +69,14 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessor do
 
   @spec log_prefix(Context.t()) :: String.t()
   def log_prefix(%Context{} = context) do
-    "OutboxProcessor [queue:#{context.queue}] "
+    "MessageQueueProcessor [queue:#{context.queue}] "
   end
 
   # Client
 
   @doc """
   Pay special attention to `concurrency`: this specifies the number of processes that may call
-  `Messaging.process_outbox_batch/2` simultaneously. This must be 1 (the default) if it is important for messages to be
+  `Messaging.process_message_queue_batch/2` simultaneously. This must be 1 (the default) if it is important for messages to be
   processed in-order.
   """
   @spec start_link(Keyword.t()) :: {:ok, pid()}
@@ -87,7 +88,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessor do
       name: name_from_queue(queue),
       context: Context.new(opts),
       producer: [
-        module: {OutboxBroadwayProducer, opts}
+        module: {MessageQueueBroadwayProducer, opts}
       ],
       processors: [
         default: [
@@ -108,7 +109,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessor do
   def check_for_new_messages(queue) when is_binary(queue) do
     name_from_queue(queue)
     |> Broadway.producer_names()
-    |> Enum.each(&OutboxBroadwayProducer.process_demand/1)
+    |> Enum.each(&MessageQueueBroadwayProducer.process_demand/1)
 
     :ok
   catch

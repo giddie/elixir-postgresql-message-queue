@@ -1,11 +1,12 @@
-defmodule PostgresqlMessageQueue.Messaging.OutboxWatcher do
+defmodule PostgresqlMessageQueue.Messaging.MessageQueueWatcher do
   @moduledoc """
-  Watches the message outbox for new messages (see `PostgresqlMessageQueue.Messaging.store_message_in_outbox/1`). When new messages
-  arrive, notifies the OutboxProcessor process for the relevant queues.
+  Watches the message message queue for new messages (see
+  `PostgresqlMessageQueue.Messaging.store_message_in_message_queue/1`). When new messages arrive,
+  notifies the MessageQueueProcessor process for the relevant queues.
   """
 
   alias __MODULE__, as: Self
-  alias PostgresqlMessageQueue.Messaging.OutboxProcessor
+  alias PostgresqlMessageQueue.Messaging.MessageQueueProcessor
   alias PostgresqlMessageQueue.Persistence.Repo
   alias PostgresqlMessageQueue.Persistence.NotificationListener
 
@@ -45,7 +46,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxWatcher do
 
   @impl GenServer
   def init(_opts) do
-    :ok = NotificationListener.listen(Repo.NotificationListener, "outbox_messages_inserted")
+    :ok = NotificationListener.listen(Repo.NotificationListener, "message_queue_messages_inserted")
     {:ok, State.new()}
   end
 
@@ -65,7 +66,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxWatcher do
   @impl GenServer
   def handle_info(
         %NotificationListener.Notification{
-          channel: "outbox_messages_inserted",
+          channel: "message_queue_messages_inserted",
           payload: queue_name
         },
         %State{} = state
@@ -73,7 +74,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxWatcher do
     state =
       if queue_name in state.notify_queues do
         Logger.info(log_prefix() <> "Notifying of new message(s) in queue: #{queue_name}")
-        :ok = OutboxProcessor.check_for_new_messages(queue_name)
+        :ok = MessageQueueProcessor.check_for_new_messages(queue_name)
         remove_notify_queue(state, queue_name)
       else
         state
@@ -108,6 +109,6 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxWatcher do
 
   @spec log_prefix() :: String.t()
   defp log_prefix() do
-    "Messaging.OutboxWatcher [#{inspect(self())}] "
+    "Messaging.MessageQueueWatcher [#{inspect(self())}] "
   end
 end

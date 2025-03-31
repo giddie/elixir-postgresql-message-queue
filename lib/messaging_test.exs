@@ -23,12 +23,12 @@ defmodule PostgresqlMessageQueue.MessagingTest do
     refute Messaging.type_filter_matches_path?("One.Two.Three.Four", type_path)
   end
 
-  test "store_message_in_outbox: serialization error" do
+  test "store_message_in_message_queue: serialization error" do
     queue = UUID.uuid4()
 
     Repo.transaction(fn ->
       assert {:error, %PostgresqlMessageQueue.Messaging.SerializationError{}} =
-               Messaging.store_message_in_outbox(
+               Messaging.store_message_in_message_queue(
                  %Message{
                    type: "Messaging.Event.Example",
                    schema_version: 1,
@@ -38,7 +38,7 @@ defmodule PostgresqlMessageQueue.MessagingTest do
                )
     end)
 
-    assert %{} == Messaging.peek_at_outbox_messages()
+    assert %{} == Messaging.peek_at_message_queue_messages()
   end
 
   test "get_queue_processable_state: empty queue" do

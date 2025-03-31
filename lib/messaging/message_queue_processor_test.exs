@@ -1,10 +1,10 @@
-defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
+defmodule PostgresqlMessageQueue.Messaging.MessageQueueProcessorTest do
   @moduledoc false
 
   alias PostgresqlMessageQueue.Messaging
   alias PostgresqlMessageQueue.Messaging.Message
   alias PostgresqlMessageQueue.Messaging.MessageHandler
-  alias PostgresqlMessageQueue.Messaging.OutboxProcessor
+  alias PostgresqlMessageQueue.Messaging.MessageQueueProcessor
   alias PostgresqlMessageQueue.Persistence.Repo
 
   # We do some global operations in the database to test what is visible in different transactions
@@ -43,7 +43,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     handler =
       &Messaging.deliver_messages_to_handlers!([&1], [{TestMessageHandler, ["Test.Command.*"]}])
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler})
 
     Repo.transaction(fn ->
       [
@@ -88,7 +88,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler})
 
     Repo.transaction(fn ->
       [%Message{type: "Test.Event.FirstEvent", schema_version: 1, payload: %{}}]
@@ -100,7 +100,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     # Only the FirstEvent message should still be in the queue. (It's currently being processed.) The SecondEvent
     # message should be invisible inside the handler's transaction.
     assert %{^queue => [%Message{type: "Test.Event.FirstEvent"}]} =
-             Messaging.peek_at_outbox_messages()
+             Messaging.peek_at_message_queue_messages()
 
     # The message handler should fail, and the message is retried. The queue should still look the same after the
     # handler failed the message.
@@ -108,7 +108,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     assert {:received_event, :first, ^handler_pid} = next_message()
 
     assert %{^queue => [%Message{type: "Test.Event.FirstEvent"}]} =
-             Messaging.peek_at_outbox_messages()
+             Messaging.peek_at_message_queue_messages()
 
     send(handler_pid, {:continue, :ok})
     assert {:received_event, :second} = next_message()
@@ -133,7 +133,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler})
 
     Repo.transaction(fn ->
       [
@@ -148,7 +148,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
 
     # The second message should still be in the database, unlocked.
     assert %{^queue => [%Message{type: "Test.Event.SecondEvent"}]} =
-             Messaging.peek_at_outbox_messages(skip_locked: true)
+             Messaging.peek_at_message_queue_messages(skip_locked: true)
 
     send(handler_pid, :continue)
 
@@ -166,7 +166,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler})
 
     Repo.transaction(fn ->
       [%Message{type: "Test.Event", schema_version: 1, payload: %{index: 1}}]
@@ -201,7 +201,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler})
 
     Repo.transaction(fn ->
       for batch_start <- 1..100//20 do
@@ -240,7 +240,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler})
 
     Repo.transaction(fn ->
       [
@@ -254,10 +254,10 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     assert {:processing_first_event, handler_pid} = next_message()
     refute_receive :received_second_event
 
-    # If max_demand isn't set to 1 for the Broadway processor, we can trigger a bug by asking the OutboxProcessor to
+    # If max_demand isn't set to 1 for the Broadway processor, we can trigger a bug by asking the MessageQueueProcessor to
     # check for new messages at this point, and it will fetch the second event message because demand > 0. As a result,
     # when the first message fails the second will be delivered first, instead of retrying the first.
-    OutboxProcessor.check_for_new_messages(queue)
+    MessageQueueProcessor.check_for_new_messages(queue)
     Process.sleep(100)
 
     # We instruct the handler for the first event to raise an exception. The message should fail and be retried.
@@ -300,7 +300,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
     # which case the message will be retried immediately. Note that because no concurrency is specified, the queue must
     # be processed sequentially, so the backoff blocks the whole queue.
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, backoff_ms: 1_000})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler, backoff_ms: 1_000})
 
     Repo.transaction(fn ->
       [
@@ -380,7 +380,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     end
 
     start_link_supervised!(
-      {OutboxProcessor, queue: queue, handler: handler, backoff_ms: backoff_ms_func}
+      {MessageQueueProcessor, queue: queue, handler: handler, backoff_ms: backoff_ms_func}
     )
 
     Repo.transaction(fn ->
@@ -462,13 +462,13 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    # In this case the backoff function will crash, but the outbox processor should fall back to a sensible default.
+    # In this case the backoff function will crash, but the message queue processor should fall back to a sensible default.
     backoff_ms_func = fn
       1 -> raise "Test backoff_ms_func exception!"
     end
 
     start_link_supervised!(
-      {OutboxProcessor, queue: queue, handler: handler, backoff_ms: backoff_ms_func}
+      {MessageQueueProcessor, queue: queue, handler: handler, backoff_ms: backoff_ms_func}
     )
 
     Repo.transaction(fn ->
@@ -490,7 +490,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     refute_receive :received_second_event
 
     # The backoff should apply even if we ask the processor to check for messages.
-    :ok = Messaging.OutboxProcessor.check_for_new_messages(queue)
+    :ok = Messaging.MessageQueueProcessor.check_for_new_messages(queue)
 
     # We waited up to 100ms for that second event. That first message shouldn't be retried for another ~900ms.
     refute_receive _, 800
@@ -533,7 +533,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
     # which case the message will be retried immediately. Note that because no concurrency is specified, the queue must
     # be processed sequentially, so the backoff blocks the whole queue.
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, backoff_ms: 1_000})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler, backoff_ms: 1_000})
 
     Repo.transaction(fn ->
       [%Message{type: "Test.Event.FirstEvent", schema_version: 1, payload: %{}}]
@@ -590,7 +590,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, batch_size: 2})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler, batch_size: 2})
 
     Repo.transaction(fn ->
       [
@@ -605,11 +605,11 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     assert {:received_event, :first, handler_pid} = next_message()
     refute_received {:received_event, :second, _handler_pid}
 
-    # When the first event is received, the second message should not still be in the outbox, because it should have
+    # When the first event is received, the second message should not still be in the message queue, because it should have
     # been collected as part of the same batch. But the third event should be there because it will be in the next
     # batch.
     assert %{^queue => [%Message{type: "Test.Event.ThirdEvent"}]} =
-             Messaging.peek_at_outbox_messages(skip_locked: true)
+             Messaging.peek_at_message_queue_messages(skip_locked: true)
 
     send(handler_pid, :continue)
 
@@ -640,7 +640,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, batch_size: 2})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler, batch_size: 2})
 
     Repo.transaction(fn ->
       [
@@ -689,7 +689,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         :ok
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, concurrency: 2})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler, concurrency: 2})
 
     Repo.transaction(fn ->
       [
@@ -738,7 +738,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
         end
     end
 
-    start_link_supervised!({OutboxProcessor, queue: queue, handler: handler, concurrency: 2})
+    start_link_supervised!({MessageQueueProcessor, queue: queue, handler: handler, concurrency: 2})
 
     Repo.transaction(fn ->
       [
@@ -779,7 +779,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     end
 
     start_link_supervised!(
-      {OutboxProcessor, queue: queue, handler: handler, batch_size: 5, concurrency: 5}
+      {MessageQueueProcessor, queue: queue, handler: handler, batch_size: 5, concurrency: 5}
     )
 
     Repo.transaction(fn ->
@@ -831,7 +831,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
     # which case the message will be processed immediately after any other messages that are already in the queue.
     start_link_supervised!(
-      {OutboxProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000}
+      {MessageQueueProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000}
     )
 
     Repo.transaction(fn ->
@@ -922,7 +922,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     end
 
     start_link_supervised!(
-      {OutboxProcessor,
+      {MessageQueueProcessor,
        queue: queue, handler: handler, concurrency: 2, backoff_ms: backoff_ms_func}
     )
 
@@ -1005,7 +1005,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     end
 
     start_link_supervised!(
-      {OutboxProcessor,
+      {MessageQueueProcessor,
        queue: queue, handler: handler, concurrency: 2, backoff_ms: backoff_ms_func}
     )
 
@@ -1077,7 +1077,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxProcessorTest do
     # In this case the backoff is configured to process the failed message after a fixed interval. This could be 0, in
     # which case the message will be processed immediately after any other messages that are already in the queue.
     start_link_supervised!(
-      {OutboxProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000}
+      {MessageQueueProcessor, queue: queue, handler: handler, concurrency: 2, backoff_ms: 1_000}
     )
 
     Repo.transaction(fn ->

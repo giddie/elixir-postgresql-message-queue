@@ -1,4 +1,4 @@
-defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
+defmodule PostgresqlMessageQueue.Messaging.MessageQueueBroadwayProducer do
   @moduledoc """
   A Broadway producer that emits messages from a specified queue.
   """
@@ -7,7 +7,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
 
   alias PostgresqlMessageQueue.Messaging
   alias PostgresqlMessageQueue.Messaging.Message
-  alias PostgresqlMessageQueue.Messaging.OutboxWatcher
+  alias PostgresqlMessageQueue.Messaging.MessageQueueWatcher
 
   use GenStage
 
@@ -86,7 +86,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
 
       # This is chosen so that it's always possible to fetch enough batches in parallel to cover all the demand we could
       # receive. The value of concurrency is the maximum demand we could receive (thanks to max_demand configured on the
-      # call to `Broadway.start_link` in `OutboxProcessor`).
+      # call to `Broadway.start_link` in `MessageQueueProcessor`).
       #
       # NOTE: It's particularly important that when concurrency = 1, we should only be retrieving one batch at a time,
       #       because in this case we're expecting messages to be processed in strict sequence.
@@ -126,9 +126,9 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
   def init(opts \\ []) do
     state = State.new(opts)
 
-    # Monitor the OutboxWatcher, because if we are relying on it to inform us of new messages and its db connection
+    # Monitor the MessageQueueWatcher, because if we are relying on it to inform us of new messages and its db connection
     # dies, we need to check our queue and subscribe again. We don't handle this message, so we'll just die.
-    Process.monitor(OutboxWatcher)
+    Process.monitor(MessageQueueWatcher)
 
     Logger.info(log_prefix(state) <> "Started")
 
@@ -257,15 +257,15 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
         # We ran out of messages in the queue, but still have pending demand. We want to suspend processing until there
         # is a message to process.
 
-        # Note that the OutboxWatcher notification happens only once, when the next message is
+        # Note that the MessageQueueWatcher notification happens only once, when the next message is
         # inserted into the database (and any wrapping transaction commits), and arrives as a call to
-        # OutboxProcessor.check_for_new_messages/1.
-        OutboxWatcher.notify_on_new_message(state.queue)
+        # MessageQueueProcessor.check_for_new_messages/1.
+        MessageQueueWatcher.notify_on_new_message(state.queue)
 
         # Messages could have arrived between this batch returning empty and the above subscription coming into effect.
         case Messaging.get_queue_processable_state(state.queue) do
           :empty ->
-            # We can just wait for the OutboxWatcher to tell us when a new message arrives.
+            # We can just wait for the MessageQueueWatcher to tell us when a new message arrives.
             :ok
 
           :processable ->
@@ -313,7 +313,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
         # This call will block until the handler returns, which doesn't happen until all the messages from the batch are
         # processed.
         num_processed =
-          Messaging.process_outbox_batch(
+          Messaging.process_message_queue_batch(
             state.queue,
             batch_size: state.batch_size,
             handler: message_handler
@@ -397,7 +397,7 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
     new_metadata = Map.put(message.metadata, "attempt", attempt + 1)
     message = %{message | metadata: new_metadata}
 
-    # Note that because this function is called as part of the handler for `Messaging.process_outbox_batch/2`, the
+    # Note that because this function is called as part of the handler for `Messaging.process_message_queue_batch/2`, the
     # re-enqueued message is inserted in the same transaction that is locking the original messages. So either the
     # transaction commits, deleting the original message record, or the whole transaction is rolled back and the
     # re-enqueued message is not inserted.
@@ -429,6 +429,6 @@ defmodule PostgresqlMessageQueue.Messaging.OutboxBroadwayProducer do
 
   @spec log_prefix(State.t()) :: String.t()
   defp log_prefix(%State{} = state) do
-    "OutboxBroadwayProducer [#{inspect(self())} queue:#{state.queue}] "
+    "MessageQueueBroadwayProducer [#{inspect(self())} queue:#{state.queue}] "
   end
 end
